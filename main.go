@@ -9,3 +9,7 @@ func main() {
 	}
 	fmt.Println("Hello world!")
 }
+
+func unusedFunction(v int64) {
+
+}
