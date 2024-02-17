@@ -3,12 +3,6 @@ on:
   pull_request:
     branches: [master]
 
-env:
-  HOME: "/home/runner/digital/work/"
-  GOPRIVATE: "github.com/tokopedia/*"
-  GOPATH: "/home/runner/digital/work/digital/go"
-  GO111MODULE: on
-
 jobs:
   test:
     runs-on: ubuntu-latest
