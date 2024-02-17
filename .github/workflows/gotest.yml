@@ -1,0 +1,114 @@
+name: Test Coverage
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    outputs:
+      skipped_files: ${{ steps.check.outputs.skipped_files }}
+      deleted_files: ${{ steps.check.outputs.deleted_files }}
+    steps:
+      - name: Configure git for private modules
+        env:
+          TOKEN: ${{ secrets.TIXID_ACCESS_TOKEN }}
+          USER_NAME: ${{ secrets.TIXID_USER_NAME }}
+        run: git config --global url."https://${USER_NAME}:${TOKEN}@github.com".insteadOf "https://github.com"
+
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.14.x
+
+      - name: Checkout Main
+        uses: actions/checkout@v2
+        with:
+          ref: master
+
+      - name: Test Main Branch
+        run: |
+          go test $(go list ./... | grep -v /mock | grep -v /proto) -cover -count=1 -race -coverprofile ../main.out
+
+      - name: Set Main Branch Code Coverage
+        id: codecov-main-branch
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{secrets.TIXID_ACCESS_TOKEN}}
+          result-encoding: string
+          script: |
+            const goTool = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/gotool.js`)
+            return await goTool({file: "../main.out"})
+
+      - name: Checkout PR Branch
+        uses: actions/checkout@v2
+
+      - name: Test PR Branch
+        run: |
+          go test $(go list ./... | grep -v mock | grep -v /proto) -cover -count=1 -race -coverprofile ../pr.out
+
+      - name: Set PR Branch Code Coverage
+        id: codecov-pr-branch
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{secrets.TIXID_ACCESS_TOKEN}}
+          result-encoding: string
+          script: |
+            const goTool = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/gotool.js`)
+            return await goTool({file: "../pr.out"})
+
+      - name: Checking Files
+        id: check
+        run: |
+          echo "::set-output name=skipped_files::$(git diff --name-only --diff-filter=MRA ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -G"t.Skip"| grep _test.go$ | xargs)"
+          echo "::set-output name=deleted_files::$(git diff --name-only --diff-filter=D ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep _test.go$ | xargs)"
+
+      - name: Create Comment
+        uses: actions/github-script@v3
+        env:
+          main_code_cov: ${{steps.codecov-main-branch.outputs.result}}
+          pr_code_cov: ${{steps.codecov-pr-branch.outputs.result}}
+          skipped: ${{steps.check.outputs.skipped_files}}
+          deleted: ${{steps.check.outputs.deleted_files}}
+        with:
+          github-token: ${{secrets.TIXID_ACCESS_TOKEN}}
+          script: |
+            const runID = ${{github.run_id}}
+            mainCodeCov =  process.env.main_code_cov.replace(/[\n\t\r]/g,"")
+            prCodeCov =  process.env.pr_code_cov.replace(/[\n\t\r]/g,"")
+
+            skipped = ""
+            process.env.skipped && process.env.skipped.split(" ").forEach((word) => {
+              skipped += `> ${word} \n`;
+            });
+
+            deleted = ""
+            process.env.deleted && process.env.deleted.split(" ").forEach((word) => {
+              deleted += `> ${word} \n`;
+            });
+
+            const body = `
+            ### Test Coverage Result
+            Success! :confetti_ball::confetti_ball::confetti_ball:
+            **Code Coverage**
+            Main: ${mainCodeCov}
+            PR  : ${prCodeCov}
+            Check Detail: [Here](https://github.com/${context.issue.owner}/${context.issue.repo}/actions/runs/${runID})
+            `
+
+            const fileCheckBody = skipped || deleted ? `
+            ### Skipped/Deleted Unit Tests
+
+            **Skipped Unit Tests**
+            ${skipped}
+
+            **Deleted Unit Tests**
+            ${deleted}
+            ` : ""
+
+            github.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body + fileCheckBody
+            })
