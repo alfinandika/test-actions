@@ -21,25 +21,6 @@ jobs:
         with:
           go-version: 1.14.x
 
-      - name: Checkout Main
-        uses: actions/checkout@v2
-        with:
-          ref: master
-
-      - name: Test Main Branch
-        run: |
-          go test $(go list ./... | grep -v /mock | grep -v /proto) -cover -count=1 -race -coverprofile ../main.out
-
-      - name: Set Main Branch Code Coverage
-        id: codecov-main-branch
-        uses: actions/github-script@v3
-        with:
-          github-token: ${{secrets.TIXID_ACCESS_TOKEN}}
-          result-encoding: string
-          script: |
-            const goTool = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/gotool.js`)
-            return await goTool({file: "../main.out"})
-
       - name: Checkout PR Branch
         uses: actions/checkout@v2
 
