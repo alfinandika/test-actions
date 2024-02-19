@@ -8,6 +8,8 @@ func main() {
 		fmt.Println("PPP")
 	}
 	fmt.Println("Hello world!")
+
+	fmt.Println("PPPPPPP")
 }
 
 func unusedFunction(v int64) {
